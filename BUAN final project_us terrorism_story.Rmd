@@ -1,0 +1,190 @@
+---
+title: "The deadly weapons in US terrorist attacks"
+author: "Zeyang Wu"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+# Course: BUAN 5210
+# Title: Final Project
+# Purpose: Dashboard for US terrorist attacks 
+# Date: Dec 05 2017
+# Author: Zeyang Wu
+
+# Clear working environment
+rm(list=ls(all=TRUE)) 
+
+#Load packages used in this file
+library(tidyverse)
+library(plotly)
+library(gridExtra)
+library(ggplot2)
+library(maps) # For map data
+library(ggplot2)
+library(mapproj)
+
+#load the data
+usta <- read.csv("USterrorismdb.csv", stringsAsFactors = F)
+#clean data
+usta <- usta %>%
+        select(-c(eventid, approxdate,resolution,country,country_txt,addnotes,dbsource, INT_LOG, INT_IDEO,INT_MISC,INT_ANY)) %>% 
+  mutate(weapon=ifelse(weaptype1_txt %in% c("Melee", "Firearms", "Incendiary", "Explosives/Bombs/Dynamite"), weaptype1_txt, 'Other')) #put leastest weapon types into 'other' category'
+```
+
+## Introduction
+Terrorist attack is one of the biggest threats to the safety of human beings living on the planet, United States is not an exception. The analysis on the United States terrorist attacks was conducted based on the data collected in the [Global Terrorism Database](https://www.kaggle.com/START-UMD/gtd/data) throughout a timespan from year 1970 to 2016. Notorious terrorists use different attack weapons when they are committing attacks. This paper explores what type of weapons used are most deadly in US terrorist attacks, so that governments will be able to better prevent and recover from the attacks from those weapons.
+
+## How many terrorist attacks happened in States from 1970 to 2016?
+Based from the first graph, it shows all the terrorist attacks happened in different states throughout year 1970 to 2016. The layer of the color reflects the amount of attacks. It is clear that California and New York experience the most terrorist attacks with a number of 586 and 504 incidents respectively. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.height = 3}
+#using ggplot to do a choropleth map showing total attacks in states
+ustanew <- usta %>%
+  group_by(provstate)%>%
+  summarise(TotalAttackCounts=n()) #count the number of attacks by states
+df <- data.frame((ustanew)) %>%    #create new df with states and attack counts
+  mutate(provstate = tolower(provstate))
+
+
+states_map <- map_data("state")
+#Merge the data sets together
+attack_map <- merge(states_map, df, by.x="region", by.y="provstate") %>%
+arrange(group, order) #sort by group, then order
+#plot the map
+graph5 <- ggplot(attack_map, aes(x=long, y=lat, group=group, fill=TotalAttackCounts)) +
+  geom_polygon(colour="black") +
+  coord_map("polyconic") +
+  scale_fill_continuous(low = '#ffffff', high = '#cc66cc') +
+  labs(title = 'New York and California experienced the
+       most terrorist attacks from 1970 to 2016') +
+  theme(plot.title = element_text(size=rel(0.9)),
+        axis.text = element_blank(),
+        axis.title = element_blank(),
+        panel.grid = element_line(color = '#ffffff'),
+        panel.background = element_rect(fill = '#ffffff'))
+  
+ggplotly(graph5)
+#New York and California experienced the most terrorist attacks from 1970 to 2016
+```
+
+
+##What are the two most attack weapons in California and New York states?
+Selecting the states that experienced the highest number of attacks, California and New York, a further analysis about the different weapons used is conducted. The data mentions in total 12 types of attack weapons, including explosives, hijacking, chemicals, vehicles, etc. The least used weapons are categorized into the "other" category.  Explosives and incendiary weapons are most frequently used in California and New York terrorist attacks, followed by Firearms and Melee. In the 1970 to 2016 time period, California experienced more terrorist attacks than New York, so the frequency for each weapon used in California is higher than that in New York. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.height = 3}
+#use a bar chart to plot the usage of weapons in CA and NY
+ustan2 <- usta %>%
+  filter(provstate %in% c('New York', 'California')) %>% 
+  group_by(provstate, weapon) %>%
+  summarise(n = n())
+ustan2$weapon <- factor(c('Explosives', 'Firearms', 'Incendiary', 'Melee', 'Other'),
+                        c('Explosives', 'Incendiary', 'Firearms', 'Melee', 'Other'))
+#plot the bar graph
+graph6 <- ggplot(ustan2, aes(x = weapon, y = n, fill = provstate)) +
+  geom_bar(stat = 'identity', position = 'dodge') +
+  scale_fill_manual(values = c('#cc66cc', '#ee88ee')) +
+  labs(
+    title = 'Explosives and incendiary weapons are most freqeuently
+used in California and New York terrorist attacks',
+x = 'Type of Weapon Used',
+y = 'Number of Attacks'
+  ) +
+  theme(legend.position = 'top',
+    legend.direction = 'horizontal',
+    legend.title = element_blank(),
+    plot.title = element_text(hjust = 0.5, size=rel(0.9)),
+    axis.text = element_text(size=rel(0.7)),
+    axis.title = element_text(size=rel(0.7)),
+     axis.line = element_line(color = '#666666'),
+    panel.background = element_rect(fill = '#ffffff') 
+  )
+
+
+ggplotly(graph6)
+#Explosives and incendiary weapons are most freqeuently used in California and New York terrorist attacks
+```
+
+##Which weapons are more deadly? 
+The most frequently used weapons are not necessarily the most damaging. Therefore, analysis based on the deceased casualties for each weapon category is conducted. The ratio of deceased casualties was calculated by death amount divided by the sum of death and injured amount. The graph shows that, even though explosives and incendiary weapons are used the most, they are actually much less deadly than firearms. Moreover, the firearms used in New York caused a greater proportion of deaths than in California, while the opposite is true for explosives and incendiary weapons.  It is important that the government closely regulates firearm use. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE,fig.height = 3}
+#use a bar chart to plot the kill ratio of weapons in CA and NY
+ustan3 <- usta %>%
+  filter(provstate %in% c('New York', 'California')) %>% 
+  group_by(provstate, weapon) %>%
+  summarise(kill = sum(nkill, na.rm = T),
+            wound = sum(nwound, na.rm = T)) %>% 
+  mutate(killratio = round(kill/(kill + wound), digits =3))  #calculating the kill ratio
+ustan3$weapon <- factor(c('Explosives', 'Firearms', 'Incendiary', 'Melee', 'Other'),
+                        c('Explosives', 'Incendiary', 'Firearms', 'Melee', 'Other'))
+#plot the bar graph
+graph7 <- ggplot(ustan3, aes(x = weapon, y = killratio, fill = provstate)) +
+  geom_bar(stat = 'identity', position = 'dodge') +
+  scale_fill_manual(values = c('#cc66cc', '#ee88ee')) +
+  labs(
+    title = 'Firearms are more deadly than explosives and incendiary weapons',
+x = 'Type of Weapon Used',
+y = 'Proportion of Deceased Casualties'
+  ) +
+  theme(
+    legend.position = 'top',
+    legend.direction = 'horizontal',
+    legend.title = element_blank(),
+    axis.line = element_line(color = '#666666'),
+    axis.title = element_text(size=rel(0.7)),
+    axis.text = element_text(size=rel(0.7)),
+    plot.title = element_text(hjust = 0.5,size=rel(0.9)),
+    panel.background = element_rect(fill = '#ffffff')
+  )
+
+ggplotly(graph7)
+#Firearms are more deadly than explosives and incendiary weapons
+
+```
+
+##What is the usage trend for top three used attack weapons from 1990 to 2015?
+Since the top three attack weapons used are explosives, incendiary weapons, and firearms. The graph shows the number of attacks occurred using those three weapons from year 1990 to 2015. Explosives are used the most in attacks, but firearm use in terrorist attacks increased sharply from 2005 to 2015, compared to explosives and incendiary weapons. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE,fig.height = 3}
+#use a line graph to show the trend for top three used weapons from 1990-2015
+ustan4 <- usta %>%
+  filter(
+    weapon %in% c('Explosives/Bombs/Dynamite', 'Incendiary', 'Firearms'),
+    iyear >= 1990  #select year greater than 1990
+  ) %>%
+  mutate(iyear = round(iyear * 0.2) * 5) %>% #year 1990 to 2015, every 5 years
+  group_by(iyear, weapon) %>% 
+  summarise(n = n(),
+            kill = sum(nkill),
+            wound = sum(nwound)) %>% 
+  mutate(weapon = ifelse(weapon == 'Explosives/Bombs/Dynamite', 'Explosives', weapon)) #change explosive text on x axis 
+#plot the line graph
+graph8 <- ggplot(ustan4, aes(x = iyear, y = n, color = weapon)) +
+  geom_line(size = 1.2) +
+  scale_color_manual(values = c('#eeccee', '#cc66cc', '#e0c0e0')) +
+  theme(
+    axis.line = element_line(color = '#999999'),
+    legend.position = 'top',
+    legend.direction = 'horizontal',
+    legend.title = element_blank(),
+    plot.title = element_text(hjust = 0.5,size=rel(0.9)),
+    axis.text = element_text(size=rel(0.7)),
+    axis.title = element_text(size=rel(0.7)),
+    panel.background = element_rect(fill = '#ffffff')
+  ) +
+  labs(
+    title = 'Firearm use in terrorist attacks are
+    increasing significantly in recent years',
+    x = 'Year',
+    y = 'Number of Attacks'
+  )
+ggplotly(graph8)
+#Firearm use in terrorist attacks are increasing significantly in recent years
+```
+
+##Conclusion
+From the analysis in states that experienced the most terrorist attacks, it is found that the most used weapons in those two states are explosives, incendiary weapons, and firearms. However, the most deadly weapon is firearms. The data also shows an increasing trend of firearm use in terrorist attacks in recent years. Therefore, the government should set more effective regulations to firearm usage and educate citizens on how to deal with attacks that involve firearms. 
+
+

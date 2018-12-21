@@ -1,0 +1,187 @@
+---
+title: "What type of weapons are most deadly in US terroists attacks? "
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+---
+
+```{r setup, include=FALSE}
+# Course: BUAN 5210
+# Title: Final Project
+# Purpose: Dashboard for US terrorist attacks 
+# Date: Dec 05 2017
+# Author: Zeyang Wu
+
+# Clear working environment
+rm(list=ls(all=TRUE)) 
+
+#Load packages used in this file
+library(tidyverse)
+library(plotly)
+library(gridExtra)
+library(ggplot2)
+library(maps) # For map data
+library(ggplot2)
+library(mapproj)
+```
+
+```{r}
+#load the data
+usta <- read.csv("USterrorismdb.csv", stringsAsFactors = F)
+#clean data
+usta <- usta %>%
+        select(-c(eventid, approxdate,resolution,country,country_txt,addnotes,dbsource, INT_LOG, INT_IDEO,INT_MISC,INT_ANY)) %>% 
+  mutate(weapon=ifelse(weaptype1_txt %in% c("Melee", "Firearms", "Incendiary", "Explosives/Bombs/Dynamite"), weaptype1_txt, 'Other')) #put leastest weapon types into 'other' category'
+```
+
+
+Column {data-width=500}
+-----------------------------------------------------------------------
+
+### 1. How many terrorist attacks happened in states from 1970 to 2016?
+
+```{r}
+#using ggplot to do us map
+#using ggplot to do a choropleth map showing total attacks in states
+ustanew <- usta %>%
+  group_by(provstate)%>%
+  summarise(TotalAttackCounts=n()) #count the number of attacks by states
+df <- data.frame((ustanew)) %>%    #create new df with states and attack counts
+  mutate(provstate = tolower(provstate))
+
+
+states_map <- map_data("state")
+#Merge the data sets together
+attack_map <- merge(states_map, df, by.x="region", by.y="provstate") %>%
+arrange(group, order) #sort by group, then order
+#plot the map
+graph5 <- ggplot(attack_map, aes(x=long, y=lat, group=group, fill=TotalAttackCounts)) +
+  geom_polygon(colour="black") +
+  coord_map("polyconic") +
+  scale_fill_continuous(low = '#ffffff', high = '#cc66cc') +
+  labs(title = 'New York and California experienced the
+       most terrorist attacks from 1970 to 2016') +
+  theme(plot.title = element_text(size=rel(0.9)),
+        axis.text = element_blank(),
+        axis.title = element_blank(),
+        panel.grid = element_line(color = '#ffffff'),
+        panel.background = element_rect(fill = '#ffffff'))
+  
+ggplotly(graph5)
+#New York and California experienced the most terrorist attacks from 1970 to 2016
+```
+
+### 3. Which weapons are more deadly?
+```{r}
+#use a bar chart to plot the kill ratio of weapons in CA and NY
+ustan3 <- usta %>%
+  filter(provstate %in% c('New York', 'California')) %>% 
+  group_by(provstate, weapon) %>%
+  summarise(kill = sum(nkill, na.rm = T),
+            wound = sum(nwound, na.rm = T)) %>% 
+  mutate(killratio = round(kill/(kill + wound), digits =3))  #calculating the kill ratio
+ustan3$weapon <- factor(c('Explosives', 'Firearms', 'Incendiary', 'Melee', 'Other'),
+                        c('Explosives', 'Incendiary', 'Firearms', 'Melee', 'Other'))
+#plot the bar graph
+graph7 <- ggplot(ustan3, aes(x = weapon, y = killratio, fill = provstate)) +
+  geom_bar(stat = 'identity', position = 'dodge') +
+  scale_fill_manual(values = c('#cc66cc', '#ee88ee')) +
+  labs(
+    title = 'Firearms are more deadly than explosives and incendiary weapons',
+x = 'Type of Weapon Used',
+y = 'Proportion of Deceased Casualties'
+  ) +
+  theme(
+    legend.position = 'top',
+    legend.direction = 'horizontal',
+    legend.title = element_blank(),
+    axis.line = element_line(color = '#666666'),
+    axis.title = element_text(size=rel(0.7)),
+    axis.text = element_text(size=rel(0.7)),
+    plot.title = element_text(hjust = 0.5,size=rel(0.9)),
+    panel.background = element_rect(fill = '#ffffff')
+  )
+
+ggplotly(graph7)
+#Firearms are more deadly than explosives and incendiary weapons
+```
+
+Column {data-width=500}
+-----------------------------------------------------------------------
+
+### 2. What are the two most used attack weapons?
+
+```{r}
+#use a bar chart to plot the usage of weapons in CA and NY
+ustan2 <- usta %>%
+  filter(provstate %in% c('New York', 'California')) %>% 
+  group_by(provstate, weapon) %>%
+  summarise(n = n())
+ustan2$weapon <- factor(c('Explosives', 'Firearms', 'Incendiary', 'Melee', 'Other'),
+                        c('Explosives', 'Incendiary', 'Firearms', 'Melee', 'Other'))
+#plot the bar graph
+graph6 <- ggplot(ustan2, aes(x = weapon, y = n, fill = provstate)) +
+  geom_bar(stat = 'identity', position = 'dodge') +
+  scale_fill_manual(values = c('#cc66cc', '#ee88ee')) +
+  labs(
+    title = 'Explosives and incendiary weapons are most freqeuently
+used in California and New York terrorist attacks',
+x = 'Type of Weapon Used',
+y = 'Number of Attacks'
+  ) +
+  theme(legend.position = 'top',
+    legend.direction = 'horizontal',
+    legend.title = element_blank(),
+    plot.title = element_text(hjust = 0.5, size=rel(0.9)),
+    axis.text = element_text(size=rel(0.7)),
+    axis.title = element_text(size=rel(0.7)),
+     axis.line = element_line(color = '#666666'),
+    panel.background = element_rect(fill = '#ffffff') 
+  )
+
+
+ggplotly(graph6)
+#Explosives and incendiary weapons are most freqeuently used in California and New York terrorist attacks
+```
+
+### 4. What's the usage trend for top three used attack weapons from 1990 to 2015?
+
+```{r}
+#use a line graph to show the trend for top three used weapons from 1990-2015
+ustan4 <- usta %>%
+  filter(
+    weapon %in% c('Explosives/Bombs/Dynamite', 'Incendiary', 'Firearms'),
+    iyear >= 1990  #select year greater than 1990
+  ) %>%
+  mutate(iyear = round(iyear * 0.2) * 5) %>% #year 1990 to 2015, every 5 years
+  group_by(iyear, weapon) %>% 
+  summarise(n = n(),
+            kill = sum(nkill),
+            wound = sum(nwound)) %>% 
+  mutate(weapon = ifelse(weapon == 'Explosives/Bombs/Dynamite', 'Explosives', weapon)) #change explosive text on x axis 
+#plot the line graph
+graph8 <- ggplot(ustan4, aes(x = iyear, y = n, color = weapon)) +
+  geom_line(size = 1.2) +
+  scale_color_manual(values = c('#eeccee', '#cc66cc', '#e0c0e0')) +
+  theme(
+    axis.line = element_line(color = '#999999'),
+    legend.position = 'top',
+    legend.direction = 'horizontal',
+    legend.title = element_blank(),
+    plot.title = element_text(hjust = 0.5,size=rel(0.9)),
+    axis.text = element_text(size=rel(0.7)),
+    axis.title = element_text(size=rel(0.7)),
+    panel.background = element_rect(fill = '#ffffff')
+  ) +
+  labs(
+    title = 'Firearm use in terrorist attacks are
+    increasing significantly in recent years',
+    x = 'Year',
+    y = 'Number of Attacks'
+  )
+ggplotly(graph8)
+#Firearm use in terrorist attacks are increasing significantly in recent years
+```
+
